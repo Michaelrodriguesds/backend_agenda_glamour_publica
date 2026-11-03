@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: belaagenda-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false          # cole a connection string do MongoDB Atlas no painel do Render
+      - key: JWT_SECRET
+        generateValue: true  # o Render gera um valor aleatório forte
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: ADMIN_KEY
+        sync: false          # chave SÓ SUA (painel /admin e rotas /api/admin)
+      - key: RESEND_API_KEY
+        sync: false          # chave do Resend (e-mail de recuperação de senha)
+      - key: EMAIL_FROM
+        value: "BelaAgenda <onboarding@resend.dev>"
+      - key: WORK_START
+        value: "7"
+      - key: WORK_END
+        value: "21"

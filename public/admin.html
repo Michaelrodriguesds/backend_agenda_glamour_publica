@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BelaAgenda · Painel</title>
+<style>
+  :root { --bg:#0f0a14; --card:#1a1225; --line:#2d1f3d; --text:#f5eef8; --muted:#8a7a9a;
+          --rose:#e8527a; --lav:#b47fd4; --green:#4ecba0; --gold:#f0c060; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h1 span { color: var(--rose); }
+  p.sub { color: var(--muted); margin: 0 0 18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  input, button { font: inherit; }
+  input[type=text], input[type=password], input[type=search] {
+    width:100%; background:#120c1b; color:var(--text); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  button { cursor:pointer; border:0; border-radius:12px; padding:10px 14px; font-weight:600; color:#fff; background:var(--rose); }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  button.ok { background:var(--green); color:#06241a; } button.bad { background:transparent; border:1px solid var(--rose); color:var(--rose); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1; min-width: 180px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  .chip { padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--muted); font-weight:600; }
+  .chip.on { color:var(--text); border-color:var(--lav); background:rgba(180,127,212,.15); }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; }
+  .stat b { display:block; font-size:24px; } .stat small { color:var(--muted); }
+  .user { display:grid; grid-template-columns: 1.6fr 1fr auto; gap:12px; align-items:center; padding:14px 0; border-top:1px solid var(--line); }
+  .user:first-child { border-top:0; }
+  .name { font-weight:700; } .mail { color:var(--muted); font-size:13px; word-break:break-all; }
+  .id { font-family: ui-monospace,Menlo,Consolas,monospace; letter-spacing:1.5px; color:var(--rose); font-weight:700; cursor:pointer; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .b-trial { background:rgba(240,192,96,.15); color:var(--gold); } .b-active { background:rgba(78,203,160,.15); color:var(--green); }
+  .b-blocked { background:rgba(232,82,122,.15); color:var(--rose); }
+  .days { color:var(--muted); font-size:13px; margin-top:4px; }
+  .actions { display:flex; gap:8px; }
+  #msg { min-height: 22px; margin: 10px 0 0; color: var(--gold); }
+  .hide { display:none; }
+  @media (max-width: 680px) { .stats { grid-template-columns: repeat(2,1fr); } .user { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Bela<span>Agenda</span> · Painel</h1>
+  <p class="sub">Libere ou bloqueie o acesso dos seus clientes.</p>
+
+  <section id="login" class="card">
+    <label for="key" class="sub">Chave de administrador</label>
+    <div class="row" style="margin-top:8px">
+      <input id="key" class="grow" type="password" autocomplete="off" placeholder="ADMIN_KEY">
+      <button id="enter">Entrar</button>
+    </div>
+    <div id="loginErr" style="color:var(--rose);margin-top:8px"></div>
+  </section>
+
+  <section id="panel" class="hide">
+    <div class="stats">
+      <div class="stat"><b id="sTotal">0</b><small>clientes</small></div>
+      <div class="stat"><b id="sTrial">0</b><small>em teste grátis</small></div>
+      <div class="stat"><b id="sActive">0</b><small>liberados</small></div>
+      <div class="stat"><b id="sBlocked" style="color:var(--rose)">0</b><small>bloqueados</small></div>
+    </div>
+
+    <div class="row">
+      <input id="search" class="grow" type="search" placeholder="Buscar por ID, e-mail ou nome do negócio">
+      <button class="ghost" id="refresh">Atualizar</button>
+      <button class="ghost" id="logout">Sair</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="msg"></div>
+    <div class="card" id="list"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var key = ''; try { key = sessionStorage.getItem('adm') || ''; } catch (e) {}
+  var all = []; var filter = '';
+
+  function api(method, path) {
+    return fetch(path, { method: method, headers: { 'x-admin-key': key, 'Content-Type': 'application/json' }, body: method === 'PATCH' ? '{}' : undefined })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); });
+  }
+  function say(t) { $('msg').textContent = t || ''; }
+  function fmt(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
+
+  function renderChips() {
+    var opts = [['', 'Todos'], ['blocked', 'Bloqueados'], ['trial', 'Em teste'], ['active', 'Liberados']];
+    $('chips').textContent = '';
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (filter === o[0] ? ' on' : ''); b.textContent = o[1];
+      b.onclick = function () { filter = o[0]; renderChips(); load(); };
+      $('chips').appendChild(b);
+    });
+  }
+
+  function render() {
+    var c = { trial: 0, active: 0, blocked: 0 };
+    all.forEach(function (u) { c[u.status]++; });
+    $('sTotal').textContent = all.length; $('sTrial').textContent = c.trial;
+    $('sActive').textContent = c.active; $('sBlocked').textContent = c.blocked;
+
+    var list = $('list'); list.textContent = '';
+    if (!all.length) { list.textContent = 'Nenhum cliente encontrado.'; return; }
+    all.forEach(function (u) {
+      var row = document.createElement('div'); row.className = 'user';
+
+      var a = document.createElement('div');
+      var n = document.createElement('div'); n.className = 'name'; n.textContent = u.negocio || '(sem nome)';
+      var m = document.createElement('div'); m.className = 'mail'; m.textContent = u.email;
+      var id = document.createElement('div'); id.className = 'id'; id.textContent = u.businessId; id.title = 'Clique para copiar';
+      id.onclick = function () { try { navigator.clipboard.writeText(u.businessId); say('ID ' + u.businessId + ' copiado'); } catch (e) {} };
+      a.appendChild(n); a.appendChild(m); a.appendChild(id);
+
+      var b = document.createElement('div');
+      var bd = document.createElement('span'); bd.className = 'badge b-' + u.status;
+      bd.textContent = { trial: 'Teste grátis', active: 'Liberado', blocked: 'Bloqueado' }[u.status];
+      var dd = document.createElement('div'); dd.className = 'days';
+      dd.textContent = u.status === 'blocked' ? 'Venceu em ' + fmt(u.expiraEm) : 'Vence em ' + fmt(u.expiraEm) + ' (' + u.diasRestantes + ' dias)';
+      b.appendChild(bd); b.appendChild(dd);
+
+      var act = document.createElement('div'); act.className = 'actions';
+      var ok = document.createElement('button'); ok.className = 'ok'; ok.textContent = 'Liberar +30 dias';
+      ok.onclick = function () {
+        ok.disabled = true;
+        api('PATCH', '/api/admin/users/' + u.businessId + '/unlock').then(function (r) { say(r.ok ? (u.negocio || u.email) + ': ' + r.data.message : (r.data.error || 'Erro')); load(); });
+      };
+      var bl = document.createElement('button'); bl.className = 'bad'; bl.textContent = 'Bloquear';
+      bl.onclick = function () {
+        if (!confirm('Bloquear ' + (u.negocio || u.email) + ' agora?')) return;
+        api('PATCH', '/api/admin/users/' + u.businessId + '/block').then(function (r) { say(r.ok ? 'Bloqueado.' : (r.data.error || 'Erro')); load(); });
+      };
+      act.appendChild(ok); act.appendChild(bl);
+
+      row.appendChild(a); row.appendChild(b); row.appendChild(act); list.appendChild(row);
+    });
+  }
+
+  function load() {
+    var q = [];
+    if ($('search').value.trim()) q.push('search=' + encodeURIComponent($('search').value.trim()));
+    if (filter) q.push('status=' + filter);
+    return api('GET', '/api/admin/users' + (q.length ? '?' + q.join('&') : '')).then(function (r) {
+      if (r.status === 401) { logout('Chave inválida.'); return; }
+      if (!r.ok) { say(r.data.error || 'Erro ao carregar'); return; }
+      all = r.data.data; render();
+    }).catch(function () { say('Sem conexão com o servidor.'); });
+  }
+
+  function enter() {
+    key = $('key').value.trim(); if (!key) return;
+    api('GET', '/api/admin/users').then(function (r) {
+      if (r.status === 401) { $('loginErr').textContent = 'Chave inválida.'; return; }
+      try { sessionStorage.setItem('adm', key); } catch (e) {}
+      $('login').classList.add('hide'); $('panel').classList.remove('hide'); $('loginErr').textContent = '';
+      renderChips(); all = r.data.data || []; render();
+    }).catch(function () { $('loginErr').textContent = 'Sem conexão com o servidor.'; });
+  }
+  function logout(m) {
+    key = ''; try { sessionStorage.removeItem('adm'); } catch (e) {}
+    $('panel').classList.add('hide'); $('login').classList.remove('hide'); $('key').value = ''; $('loginErr').textContent = m || '';
+  }
+
+  $('enter').onclick = enter; $('key').onkeydown = function (e) { if (e.key === 'Enter') enter(); };
+  $('refresh').onclick = load; $('logout').onclick = function () { logout(); };
+  var t; $('search').oninput = function () { clearTimeout(t); t = setTimeout(load, 250); };
+  if (key) { $('key').value = key; enter(); }
+})();
+</script>
+</body>
+</html>
