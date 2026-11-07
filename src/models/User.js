@@ -15,6 +15,9 @@ const serviceSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     price: { type: Number, default: 0, min: 0 },
     active: { type: Boolean, default: true },
+    // Aba "Clientes & Marketing": depois de quantos dias a cliente deve
+    // refazer este serviço. 0 = não gera lembrete de retorno.
+    returnDays: { type: Number, default: 0, min: 0, max: 365 },
   },
   { _id: false }
 );
@@ -22,6 +25,7 @@ const serviceSchema = new mongoose.Schema(
 const businessConfigSchema = new mongoose.Schema(
   {
     businessName: { type: String, trim: true, default: "" },
+    ownerName: { type: String, trim: true, default: "" }, // nome do dono, para a saudação do app
     logoUrl: { type: String, default: "" }, // URL da logo enviada (ex: Cloudinary) ou nome de um preset
     primaryColor: { type: String, default: "#B47FD4" },
     services: { type: [serviceSchema], default: [] },

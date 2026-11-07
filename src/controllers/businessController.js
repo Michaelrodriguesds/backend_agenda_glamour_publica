@@ -19,13 +19,13 @@ exports.getConfig = async (req, res) => {
 
 // ─── Atualizar configuração (onboarding e edições depois) ─────────
 // PUT /api/business/config
-// Body: { businessName, logoUrl, primaryColor, services: [{name, price, active}], locations: ["A","B"], workStart, workEnd }
+// Body: { businessName, ownerName, logoUrl, primaryColor, services: [{name, price, active, returnDays}], locations: ["A","B"], workStart, workEnd }
 exports.updateConfig = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
-    const { businessName, logoUrl, primaryColor, services, locations, workStart, workEnd } = req.body || {};
+    const { businessName, ownerName, logoUrl, primaryColor, services, locations, workStart, workEnd } = req.body || {};
     const bad = (msg) => res.status(400).json({ error: msg });
 
     if (locations !== undefined) {
@@ -40,6 +40,10 @@ exports.updateConfig = async (req, res) => {
       if (!Array.isArray(services)) return bad("'services' deve ser uma lista");
       if (services.length > MAX_SERVICES) return bad(`Máximo de ${MAX_SERVICES} serviços`);
       const seen = new Set(); const clean = [];
+      // Dias de retorno já salvos, por nome: um app antigo que não manda
+      // "returnDays" não pode zerar o que a dona configurou.
+      const prevDays = new Map((user.businessConfig.services || [])
+        .map((p) => [String(p.name).toLowerCase(), p.returnDays || 0]));
       for (const s of services) {
         const name = String(s?.name || "").trim();
         if (!name) continue;
@@ -49,7 +53,13 @@ exports.updateConfig = async (req, res) => {
         if (seen.has(key)) continue; // ignora duplicados
         seen.add(key);
         const price = Number(s.price);
-        clean.push({ name, price: Number.isFinite(price) && price >= 0 ? price : 0, active: s.active !== false });
+        let returnDays = prevDays.get(key) || 0;
+        if (s.returnDays !== undefined && s.returnDays !== null && s.returnDays !== "") {
+          const d = Number(s.returnDays);
+          if (!Number.isInteger(d) || d < 0 || d > 365) return bad("Dias para retorno: use um número inteiro de 0 a 365");
+          returnDays = d;
+        }
+        clean.push({ name, price: Number.isFinite(price) && price >= 0 ? price : 0, active: s.active !== false, returnDays });
       }
       user.businessConfig.services = clean;
     }
@@ -58,6 +68,11 @@ exports.updateConfig = async (req, res) => {
       const n = String(businessName).trim();
       if (n.length > 80) return bad("Nome do negócio muito longo (máx. 80 caracteres)");
       user.businessConfig.businessName = n;
+    }
+    if (ownerName !== undefined) {
+      const n = String(ownerName).trim();
+      if (n.length > 60) return bad("Seu nome está muito longo (máx. 60 caracteres)");
+      user.businessConfig.ownerName = n;
     }
     if (logoUrl !== undefined) {
       const u = String(logoUrl).trim();

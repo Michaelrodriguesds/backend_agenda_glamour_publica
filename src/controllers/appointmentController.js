@@ -57,7 +57,12 @@ const buildFilters = (query) => {
   if (query.confirmed !== undefined) filters.confirmed = query.confirmed === "true";
 
   if (query.client) {
-    filters.clientName = { $regex: esc(query.client), $options: "i" };
+    // clientExact=true → nome EXATO (ficha da cliente, que já sabe o nome
+    // completo). Sem isso, abrir "Ana" trazia também "Ana Paula" e
+    // "Mariana" (busca por pedaço do nome).
+    filters.clientName = query.clientExact === "true"
+      ? String(query.client)
+      : { $regex: esc(query.client), $options: "i" };
   }
 
   return filters;

@@ -24,7 +24,7 @@ const connectDB = async () => {
 };
 
 async function syncIndexes() {
-  const models = ["User", "Appointment", "Note"].map((n) => mongoose.model(n));
+  const models = ["User", "Appointment", "Note", "ClientPreference", "ReminderLog"].map((n) => mongoose.model(n));
   for (const m of models) await m.syncIndexes();
   console.log("✅ Índices sincronizados");
 }

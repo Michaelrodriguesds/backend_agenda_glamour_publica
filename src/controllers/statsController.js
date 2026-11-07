@@ -201,46 +201,62 @@ exports.getTrendStats = async (req, res) => {
     // Se for o ano atual, vai até o mês atual; senão, todos os 12 meses
     const maxMonth = y === currentYear ? currentMonth : 12;
 
-    const monthsData = await Promise.all(
-      Array.from({ length: maxMonth }, async (_, i) => {
-        const m        = i + 1;
-        const firstDay = new Date(Date.UTC(y, m - 1, 1,  0,  0,  0,   0));
-        const lastDay  = new Date(Date.UTC(y, m,     0, 23, 59, 59, 999));
-        const match    = { userId: oid(req.user.id), date: { $gte: firstDay, $lte: lastDay } };
+    const yearStart = new Date(Date.UTC(y, 0,        1,  0,  0,  0,   0));
+    const yearEnd   = new Date(Date.UTC(y, maxMonth, 0, 23, 59, 59, 999));
+    // Só os agendamentos DESTE negócio (aggregate precisa de ObjectId).
+    const yearMatch = { userId: oid(req.user.id), date: { $gte: yearStart, $lte: yearEnd } };
 
-        const [countResult, revenueResult, topProcResult] = await Promise.all([
-          Appointment.countDocuments(match),
+    // ── ANTES: até 3 consultas × 12 meses (até 36 no total) disparadas
+    //    de uma vez, competindo pelas mesmas conexões do pool do Mongo.
+    // ── AGORA: 2 agregações cobrindo o ano inteiro, agrupando por mês
+    //    dentro da própria query — muito mais leve para o Atlas.
+    const [countsAndRevenue, topProceduresByMonth] = await Promise.all([
 
-          Appointment.aggregate([
-            { $match: match },
-            { $group: { _id: null, total: { $sum: "$price" }, received: { $sum: { $cond: ["$paid", "$price", 0] } } } },
-          ]),
+      Appointment.aggregate([
+        { $match: yearMatch },
+        {
+          $group: {
+            _id:      { $month: "$date" },
+            count:    { $sum: 1 },
+            total:    { $sum: "$price" },
+            received: { $sum: { $cond: ["$paid", "$price", 0] } },
+          },
+        },
+      ]),
 
-          // Procedimento mais realizado no mês
-          Appointment.aggregate([
-            { $match: match },
-            { $unwind: { path: "$procedures", preserveNullAndEmptyArrays: true } },
-            {
-              $group: {
-                _id:   { $ifNull: ["$procedures", "$procedure"] },
-                count: { $sum: 1 },
-              },
+      // Procedimento mais realizado em cada mês, numa única passada
+      Appointment.aggregate([
+        { $match: yearMatch },
+        { $unwind: { path: "$procedures", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: {
+              month:     { $month: "$date" },
+              procedure: { $ifNull: ["$procedures", "$procedure"] },
             },
-            { $sort: { count: -1 } },
-            { $limit: 1 },
-          ]),
-        ]);
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { "_id.month": 1, count: -1 } },
+        { $group: { _id: "$_id.month", topProcedure: { $first: "$_id.procedure" } } },
+      ]),
+    ]);
 
-        return {
-          month:             m,
-          year:              y,
-          totalAppointments: countResult,
-          revenue:           Math.round((revenueResult[0]?.total    || 0) * 100) / 100,
-          received:          Math.round((revenueResult[0]?.received || 0) * 100) / 100,
-          topProcedure:      topProcResult[0]?._id || null,
-        };
-      })
-    );
+    const countsByMonth  = new Map(countsAndRevenue.map((r) => [r._id, r]));
+    const topProcByMonth = new Map(topProceduresByMonth.map((r) => [r._id, r.topProcedure]));
+
+    const monthsData = Array.from({ length: maxMonth }, (_, i) => {
+      const m   = i + 1;
+      const rec = countsByMonth.get(m);
+      return {
+        month:             m,
+        year:              y,
+        totalAppointments: rec?.count    || 0,
+        revenue:           Math.round((rec?.total    || 0) * 100) / 100,
+        received:          Math.round((rec?.received || 0) * 100) / 100,
+        topProcedure:      topProcByMonth.get(m) || null,
+      };
+    });
 
     // Identifica o mês de maior e menor demanda
     const maxApts = Math.max(...monthsData.map((m) => m.totalAppointments));
