@@ -1,6 +1,6 @@
 {
   "name": "belaagenda-backend",
-  "version": "2.0.0",
+  "version": "2.3.0",
   "description": "Backend do BelaAgenda (agenda online multi-negócio, teste grátis com liberação manual)",
   "main": "server.js",
   "scripts": {
@@ -10,6 +10,8 @@
     "test": "jest --runInBand",
     "test:security": "node tests/security.js",
     "test:logo": "node tests/logo.js",
+    "test:feedback": "node tests/feedback.js",
+    "test:admin-users": "node tests/admin-users.js",
     "migrate:legacy": "node scripts/migrate-legacy.js",
     "test:functional": "node tests/functional.js"
   },

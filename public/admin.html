@@ -40,13 +40,36 @@
   .actions { display:flex; gap:8px; }
   #msg { min-height: 22px; margin: 10px 0 0; color: var(--gold); }
   .hide { display:none; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .tabs { display:flex; gap:8px; margin:6px 0 14px; flex-wrap:wrap; }
+  .tab { padding:9px 16px; border-radius:12px; background:transparent; border:1px solid var(--line); color:var(--muted); font-weight:700; }
+  .tab.on { color:var(--text); border-color:var(--rose); background:rgba(232,82,122,.12); }
+  .dot { display:inline-block; min-width:20px; padding:1px 7px; margin-left:6px; border-radius:999px; background:var(--rose); color:#fff; font-size:12px; }
+  .fb { padding:14px 0; border-top:1px solid var(--line); } .fb:first-child { border-top:0; }
+  .fb .head { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px; }
+  .fb .text { white-space:pre-wrap; word-break:break-word; margin:6px 0 10px; }
+  .t-bug { background:rgba(232,82,122,.15); color:var(--rose); } .t-melhoria { background:rgba(78,203,160,.15); color:var(--green); }
+  .t-outro { background:rgba(180,127,212,.15); color:var(--lav); }
+  .s-novo { background:rgba(240,192,96,.15); color:var(--gold); } .s-lido { background:rgba(180,127,212,.15); color:var(--lav); }
+  .s-resolvido { background:rgba(78,203,160,.15); color:var(--green); }
+  textarea, select { width:100%; background:#120c1b; color:var(--text); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font:inherit; }
+  textarea { min-height:90px; resize:vertical; }
+  label.l { display:block; margin:12px 0 6px; color:var(--muted); font-size:13px; }
+  .preview { margin-top:14px; padding:12px 14px; border-radius:12px; font-weight:600; }
+  .p-info { background:rgba(180,127,212,.18); } .p-update { background:rgba(78,203,160,.18); } .p-maintenance { background:rgba(240,192,96,.18); color:var(--gold); }
+  .live { color:var(--green); font-weight:700; } .off { color:var(--muted); font-weight:700; }
   @media (max-width: 680px) { .stats { grid-template-columns: repeat(2,1fr); } .user { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <main>
-  <h1>Bela<span>Agenda</span> · Painel</h1>
-  <p class="sub">Libere ou bloqueie o acesso dos seus clientes.</p>
+  <div class="top">
+    <div>
+      <h1>Bela<span>Agenda</span> · Painel</h1>
+      <p class="sub">Clientes, mensagens e avisos para os usuários.</p>
+    </div>
+    <button class="ghost hide" id="logoutTop">Sair</button>
+  </div>
 
   <section id="login" class="card">
     <label for="key" class="sub">Chave de administrador</label>
@@ -58,6 +81,13 @@
   </section>
 
   <section id="panel" class="hide">
+    <div class="tabs" id="tabs">
+      <button class="tab on" data-tab="clientes">Clientes</button>
+      <button class="tab" data-tab="mensagens">Mensagens<span class="dot hide" id="dotNovos">0</span></button>
+      <button class="tab" data-tab="aviso">Aviso aos usuários</button>
+    </div>
+
+    <div id="tab-clientes">
     <div class="stats">
       <div class="stat"><b id="sTotal">0</b><small>clientes</small></div>
       <div class="stat"><b id="sTrial">0</b><small>em teste grátis</small></div>
@@ -68,11 +98,41 @@
     <div class="row">
       <input id="search" class="grow" type="search" placeholder="Buscar por ID, e-mail ou nome do negócio">
       <button class="ghost" id="refresh">Atualizar</button>
-      <button class="ghost" id="logout">Sair</button>
     </div>
     <div class="chips" id="chips"></div>
     <div id="msg"></div>
     <div class="card" id="list"></div>
+    </div>
+
+    <div id="tab-mensagens" class="hide">
+      <div class="row">
+        <div class="chips grow" id="fbChips" style="margin:0"></div>
+        <button class="ghost" id="fbRefresh">Atualizar</button>
+      </div>
+      <div id="fbMsg" style="min-height:22px;margin:10px 0 0;color:var(--gold)"></div>
+      <div class="card" id="fbList"></div>
+    </div>
+
+    <div id="tab-aviso" class="hide">
+      <div class="card">
+        <div>Situação atual: <span id="annState" class="off">carregando...</span></div>
+        <label class="l" for="annType">Tipo</label>
+        <select id="annType">
+          <option value="maintenance">Manutenção (o app pode ficar fora do ar)</option>
+          <option value="update">Atualização</option>
+          <option value="info">Informativo</option>
+        </select>
+        <label class="l" for="annText">Mensagem que aparece no topo do app (máx. 300)</label>
+        <textarea id="annText" maxlength="300" placeholder="Ex.: Hoje às 22h o BelaAgenda ficará em manutenção por cerca de 30 minutos."></textarea>
+        <div id="annPreview" class="preview hide"></div>
+        <div class="row" style="margin-top:14px">
+          <button class="ok" id="annOn">Publicar aviso</button>
+          <button class="ghost" id="annOff">Desligar aviso</button>
+        </div>
+        <div id="annMsg" style="min-height:22px;margin-top:10px;color:var(--gold)"></div>
+        <p class="sub" style="margin-top:10px">O aviso aparece para todos os usuários em até alguns minutos (e na hora, ao abrir o app).</p>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -82,8 +142,9 @@
   var key = ''; try { key = sessionStorage.getItem('adm') || ''; } catch (e) {}
   var all = []; var filter = '';
 
-  function api(method, path) {
-    return fetch(path, { method: method, headers: { 'x-admin-key': key, 'Content-Type': 'application/json' }, body: method === 'PATCH' ? '{}' : undefined })
+  function api(method, path, body) {
+    var payload = body !== undefined ? JSON.stringify(body) : (method === 'PATCH' ? '{}' : undefined);
+    return fetch(path, { method: method, headers: { 'x-admin-key': key, 'Content-Type': 'application/json' }, body: payload })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); });
   }
   function say(t) { $('msg').textContent = t || ''; }
@@ -136,7 +197,29 @@
         if (!confirm('Bloquear ' + (u.negocio || u.email) + ' agora?')) return;
         api('PATCH', '/api/admin/users/' + u.businessId + '/block').then(function (r) { say(r.ok ? 'Bloqueado.' : (r.data.error || 'Erro')); load(); });
       };
-      act.appendChild(ok); act.appendChild(bl);
+      var pw = document.createElement('button'); pw.className = 'ghost'; pw.textContent = 'Senha temporária';
+      pw.onclick = function () {
+        if (!confirm('Gerar uma senha temporária para ' + (u.negocio || u.email) + '?\nA senha atual deixa de valer.')) return;
+        api('PATCH', '/api/admin/users/' + u.businessId + '/reset-password').then(function (r) {
+          if (!r.ok) { say(r.data.error || 'Erro'); return; }
+          try { var cp = navigator.clipboard.writeText(r.data.tempPassword); if (cp && cp.catch) cp.catch(function () {}); } catch (e) {}
+          say('');
+          window.alert('Senha temporária de ' + r.data.email + ':\n\n' + r.data.tempPassword + '\n\n(copiada). Passe ao cliente e peça para trocar depois de entrar. Ela não aparece de novo.');
+        });
+      };
+      act.appendChild(ok); act.appendChild(bl); act.appendChild(pw);
+      if (u.status === 'blocked') { // só inativos podem ser excluídos
+        var del = document.createElement('button'); del.className = 'bad'; del.textContent = 'Excluir';
+        del.onclick = function () {
+          var typed = window.prompt('EXCLUIR de vez ' + (u.negocio || u.email) + ' e TODOS os dados dele (agendamentos, notas, clientes)?\nNão tem volta.\n\nPara confirmar, digite o ID: ' + u.businessId);
+          if (typed === null) return;
+          if (typed.trim().toUpperCase() !== u.businessId) { say('ID não confere. Nada foi excluído.'); return; }
+          api('DELETE', '/api/admin/users/' + u.businessId + '?confirm=' + encodeURIComponent(u.businessId)).then(function (r) {
+            say(r.ok ? 'Excluído (' + r.data.apagados.agendamentos + ' agendamentos, ' + r.data.apagados.notas + ' notas).' : (r.data.error || 'Erro')); load();
+          });
+        };
+        act.appendChild(del);
+      }
 
       row.appendChild(a); row.appendChild(b); row.appendChild(act); list.appendChild(row);
     });
@@ -153,22 +236,128 @@
     }).catch(function () { say('Sem conexão com o servidor.'); });
   }
 
+  // ── Abas ──────────────────────────────────────────────────────
+  var tab = 'clientes';
+  function showTab(t) {
+    tab = t;
+    ['clientes', 'mensagens', 'aviso'].forEach(function (n) { $('tab-' + n).classList.toggle('hide', n !== t); });
+    Array.prototype.forEach.call(document.querySelectorAll('#tabs .tab'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
+    if (t === 'mensagens') loadFb();
+    if (t === 'aviso') loadAnn();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#tabs .tab'), function (b) {
+    b.onclick = function () { showTab(b.getAttribute('data-tab')); };
+  });
+
+  // ── Mensagens dos usuários ────────────────────────────────────
+  var fbFilter = 'novo';
+  var TIPOS = { bug: 'Erro', melhoria: 'Melhoria', outro: 'Outro' };
+  var STATUS = { novo: 'Novo', lido: 'Lido', resolvido: 'Resolvido' };
+  function fbSay(t) { $('fbMsg').textContent = t || ''; }
+  function setDot(n) { var d = $('dotNovos'); d.textContent = n; d.classList.toggle('hide', !n); }
+
+  function renderFbChips() {
+    var opts = [['novo', 'Novos'], ['lido', 'Lidos'], ['resolvido', 'Resolvidos'], ['', 'Todos']];
+    $('fbChips').textContent = '';
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (fbFilter === o[0] ? ' on' : ''); b.textContent = o[1];
+      b.onclick = function () { fbFilter = o[0]; renderFbChips(); loadFb(); };
+      $('fbChips').appendChild(b);
+    });
+  }
+  function fbButton(label, cls, fn) {
+    var b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = fn; return b;
+  }
+  function renderFb(rows) {
+    var list = $('fbList'); list.textContent = '';
+    if (!rows.length) { list.textContent = 'Nenhuma mensagem aqui.'; return; }
+    rows.forEach(function (f) {
+      var box = document.createElement('div'); box.className = 'fb';
+      var head = document.createElement('div'); head.className = 'head';
+      var t = document.createElement('span'); t.className = 'badge t-' + f.tipo; t.textContent = TIPOS[f.tipo] || f.tipo;
+      var s = document.createElement('span'); s.className = 'badge s-' + f.status; s.textContent = STATUS[f.status] || f.status;
+      var who = document.createElement('span'); who.className = 'name'; who.textContent = f.negocio || '(sem nome)';
+      var id = document.createElement('span'); id.className = 'id'; id.textContent = f.businessId;
+      var when = document.createElement('span'); when.className = 'mail'; when.textContent = fmt(f.criadoEm) + (f.versao ? ' · app ' + f.versao : '');
+      head.appendChild(t); head.appendChild(s); head.appendChild(who); head.appendChild(id); head.appendChild(when);
+      var mail = document.createElement('div'); mail.className = 'mail'; mail.textContent = f.email;
+      var text = document.createElement('div'); text.className = 'text'; text.textContent = f.mensagem;
+      var act = document.createElement('div'); act.className = 'actions';
+      function setSt(st) { return function () { api('PATCH', '/api/admin/feedback/' + f.id, { status: st }).then(function (r) { fbSay(r.ok ? '' : (r.data.error || 'Erro')); loadFb(); }); }; }
+      if (f.status !== 'lido') act.appendChild(fbButton('Marcar como lido', 'ghost', setSt('lido')));
+      if (f.status !== 'resolvido') act.appendChild(fbButton('Resolvido', 'ok', setSt('resolvido')));
+      act.appendChild(fbButton('Apagar', 'bad', function () {
+        if (!confirm('Apagar esta mensagem?')) return;
+        api('DELETE', '/api/admin/feedback/' + f.id).then(function (r) { fbSay(r.ok ? 'Apagada.' : (r.data.error || 'Erro')); loadFb(); });
+      }));
+      box.appendChild(head); box.appendChild(mail); box.appendChild(text); box.appendChild(act); list.appendChild(box);
+    });
+  }
+  function loadFb() {
+    return api('GET', '/api/admin/feedback' + (fbFilter ? '?status=' + fbFilter : '')).then(function (r) {
+      if (r.status === 401) { logout('Chave inválida.'); return; }
+      if (!r.ok) { fbSay(r.data.error || 'Erro ao carregar'); return; }
+      setDot(r.data.novos); renderFb(r.data.data);
+    }).catch(function () { fbSay('Sem conexão com o servidor.'); });
+  }
+  function pollNovos() { // só atualiza a bolinha de "novas mensagens"
+    return api('GET', '/api/admin/feedback?status=novo').then(function (r) { if (r.ok) setDot(r.data.novos); }).catch(function () {});
+  }
+  $('fbRefresh').onclick = loadFb;
+
+  // ── Aviso para todos os usuários ──────────────────────────────
+  var ANN_LABEL = { maintenance: '🛠️ Manutenção', update: '⬆️ Atualização', info: 'ℹ️ Aviso' };
+  function annSay(t) { $('annMsg').textContent = t || ''; }
+  function annPreview() {
+    var p = $('annPreview'), txt = $('annText').value.trim();
+    p.classList.toggle('hide', !txt);
+    p.className = 'preview p-' + $('annType').value + (txt ? '' : ' hide');
+    p.textContent = txt ? ANN_LABEL[$('annType').value] + ' — ' + txt : '';
+  }
+  function annState(a) {
+    var st = $('annState');
+    st.textContent = a.active ? 'NO AR — os usuários estão vendo o aviso' : 'desligado';
+    st.className = a.active ? 'live' : 'off';
+  }
+  function loadAnn() {
+    return api('GET', '/api/admin/announcement').then(function (r) {
+      if (r.status === 401) { logout('Chave inválida.'); return; }
+      if (!r.ok) { annSay(r.data.error || 'Erro'); return; }
+      $('annType').value = r.data.type; $('annText').value = r.data.message; annState(r.data); annPreview();
+    }).catch(function () { annSay('Sem conexão com o servidor.'); });
+  }
+  function saveAnn(active) {
+    var body = { active: active, type: $('annType').value, message: $('annText').value.trim() };
+    if (active && body.message.length < 3) { annSay('Escreva a mensagem do aviso.'); return; }
+    if (active && !confirm('Publicar este aviso para TODOS os usuários agora?')) return;
+    api('PUT', '/api/admin/announcement', body).then(function (r) {
+      if (!r.ok) { annSay(r.data.error || 'Erro'); return; }
+      annState(r.data); annSay(active ? 'Aviso publicado.' : 'Aviso desligado.');
+    });
+  }
+  $('annOn').onclick = function () { saveAnn(true); };
+  $('annOff').onclick = function () { saveAnn(false); };
+  $('annType').onchange = annPreview; $('annText').oninput = annPreview;
+
   function enter() {
     key = $('key').value.trim(); if (!key) return;
     api('GET', '/api/admin/users').then(function (r) {
       if (r.status === 401) { $('loginErr').textContent = 'Chave inválida.'; return; }
       try { sessionStorage.setItem('adm', key); } catch (e) {}
       $('login').classList.add('hide'); $('panel').classList.remove('hide'); $('loginErr').textContent = '';
-      renderChips(); all = r.data.data || []; render();
+      $('logoutTop').classList.remove('hide');
+      renderChips(); renderFbChips(); all = r.data.data || []; render(); showTab('clientes'); pollNovos();
     }).catch(function () { $('loginErr').textContent = 'Sem conexão com o servidor.'; });
   }
   function logout(m) {
     key = ''; try { sessionStorage.removeItem('adm'); } catch (e) {}
+    $('logoutTop').classList.add('hide');
     $('panel').classList.add('hide'); $('login').classList.remove('hide'); $('key').value = ''; $('loginErr').textContent = m || '';
   }
 
   $('enter').onclick = enter; $('key').onkeydown = function (e) { if (e.key === 'Enter') enter(); };
-  $('refresh').onclick = load; $('logout').onclick = function () { logout(); };
+  $('refresh').onclick = load; $('logoutTop').onclick = function () { logout(); };
   var t; $('search').oninput = function () { clearTimeout(t); t = setTimeout(load, 250); };
   if (key) { $('key').value = key; enter(); }
 })();

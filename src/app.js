@@ -16,6 +16,8 @@ require("./models/Appointment");
 require("./models/Note");
 require("./models/ClientPreference");
 require("./models/ReminderLog");
+require("./models/Feedback");
+require("./models/Announcement");
 
 const app = express();
 
@@ -47,6 +49,8 @@ const forgotLimiter = rateLimit({ ...limiterBase, windowMs: 15 * 60 * 1000, max:
   message: tooMany("Muitos pedidos de código. Aguarde 15 minutos.") });
 const resetLimiter  = rateLimit({ ...limiterBase, windowMs: 15 * 60 * 1000, max: 10, keyGenerator: byIpEmail,
   message: tooMany("Muitas tentativas. Aguarde 15 minutos.") });
+const feedbackLimiter = rateLimit({ ...limiterBase, windowMs: 60 * 60 * 1000, max: 10,
+  message: tooMany("Você já enviou vários relatos. Tente novamente mais tarde.") });
 const adminLimiter  = rateLimit({ ...limiterBase, windowMs: 15 * 60 * 1000, max: 300,
   message: tooMany("Muitas requisições ao painel. Aguarde.") });
 
@@ -69,6 +73,7 @@ app.post("/api/auth/register",        registerLimiter);
 app.post("/api/auth/forgot-password", forgotLimiter);
 app.post("/api/auth/reset-password",  resetLimiter);
 app.use("/api/admin",                 adminLimiter);
+app.post("/api/feedback",             feedbackLimiter);
 
 // ── Rotas ────────────────────────────────────────────────────────
 app.use("/api/appointments",  require("./routes/appointmentRoutes"));
@@ -80,6 +85,8 @@ app.use("/api/business",      require("./routes/businessRoutes"));
 app.use("/api/admin",         require("./routes/adminRoutes"));
 app.use("/api/clients",       require("./routes/clientRoutes"));    // lista de clientes calculada no banco
 app.use("/api/marketing",     require("./routes/marketingRoutes")); // aba Clientes & Marketing
+app.use("/api/feedback",      require("./routes/feedbackRoutes"));  // relatos de erro/melhoria dos usuários
+app.get("/api/status",        require("./controllers/announcementController").getPublic); // aviso de manutenção (sem login)
 
 // Painel de administração (página estática; a chave só é usada nas chamadas /api/admin)
 app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "..", "public", "admin.html")));

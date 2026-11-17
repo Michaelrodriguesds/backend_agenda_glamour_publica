@@ -9,8 +9,48 @@ a sua realidade**: serviços, locais, cor, nome e prazos próprios.
 
 | Data | Versão | O que mudou | Onde |
 | --- | --- | --- | --- |
+| 17/11/2026 | 2.3.1 | Novo ícone de agenda (calendário) no site, no app instalado, no Android e na loja; nome "BelaAgenda" na aba do navegador | App |
+| 17/11/2026 | 2.3 | Painel admin: excluir usuário inativo (com todos os dados) e gerar senha temporária quando o e-mail de recuperação não chega | Backend |
+| 09/11/2026 | 2.2.1 | Corrige números do calendário invisíveis no estilo Claro; seletores de data/hora seguem o estilo; texto fraco do estilo Rosa mais legível | App |
+| 07/11/2026 | 2.2 | Relatos de erro/melhoria dos usuários para o admin, aviso de manutenção/atualização para todos, botão Sair no painel | Backend + App |
 | 06/11/2026 | 2.1 | Desempenho, layout para tablet/PC, estilos com a cor da marca, aba Clientes & Marketing, testes automáticos | Backend + App |
 | — | 2.0 | Versão multi-negócio: cadastro, teste grátis, bloqueio e liberação manual, configuração do negócio | Backend + App |
+
+---
+
+## 2.3 — 17/11/2026
+
+**Pedido:** poder excluir do painel usuários que não usam mais o app; contornar o
+e-mail de recuperação que não chega enquanto não há domínio verificado no Resend.
+
+- **Excluir (`DELETE /api/admin/users/:businessId?confirm=ID`):** só vale para usuário
+  **bloqueado/vencido** (com acesso ativo = 409, "bloqueie antes") e exige o próprio ID em
+  `confirm`. Apaga agendamentos, notas, preferências de clientes, lembretes, relatos e a conta —
+  sempre filtrando pelo dono, nunca afeta outro negócio. Sem volta. No painel: botão **Excluir**
+  (só aparece nos bloqueados) e o navegador pede para digitar o ID.
+- **Senha temporária (`PATCH /api/admin/users/:businessId/reset-password`):** gera 10 caracteres
+  aleatórios (sem 0/O/1/l/I), grava só o hash, cancela código pendente e mostra a senha UMA vez
+  (copiada, se o navegador deixar). Passe ao cliente por WhatsApp.
+- Testes: `npm test` = 91 (11 novos); `npm run test:admin-users` = 21 ponta a ponta com banco de teste.
+- O repositório do app ganhou de volta `build_flutter.sh` e `netlify.toml` (já existiam no GitHub).
+
+---
+
+## 2.2 — 07/11/2026
+
+**Pedido:** o usuário poder relatar erros/melhorias ao admin; o admin poder avisar
+todos os usuários de manutenção/atualização; botão de sair no painel.
+
+- **Relatos:** app → menu ⋮ do Início (e tela de bloqueio) → "Enviar relato". Rota
+  `POST /api/feedback` (só login, sem checkTrial: quem está bloqueado também pode pedir ajuda;
+  10 por hora por IP). O negócio/ID/e-mail vêm do banco, nunca do corpo. Model `Feedback`.
+- **Painel `/admin`:** abas Clientes, **Mensagens** (novos/lidos/resolvidos, apagar, bolinha de novas) e
+  **Aviso aos usuários** (tipo + texto até 300, pré-visualização, publicar/desligar). Botão **Sair** fixo no topo.
+- **Aviso global:** `GET /api/status` (público, cache de 15 s, nunca derruba o app) devolve `{announcement}`.
+  O admin liga/desliga em `PUT /api/admin/announcement`. App: faixa no topo (Início e Login), consulta ao abrir,
+  a cada 5 min e ao voltar do segundo plano; o "X" fecha até o texto mudar. Model `Announcement` (1 documento).
+- Rotas admin novas: `GET/PATCH/DELETE /api/admin/feedback[/:id]`, `GET/PUT /api/admin/announcement`.
+- Testes: `npm test` agora tem 80 testes (16 novos); `npm run test:feedback` roda o ponta a ponta contra um servidor real de teste.
 
 ---
 
